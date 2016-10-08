@@ -1,6 +1,9 @@
 (ns user
   (:require
-   [figwheel-sidecar.repl-api :as f]))
+   [figwheel-sidecar.repl-api :as f]
+   [cljs.repl.node :as node]
+   [cljs.repl.browser :as browser]
+   [mount.core :as mount :refer [defstate]]))
 
 ;; user is a namespace that the Clojure runtime looks for and
 ;; loads if its available
@@ -41,3 +44,6 @@
   []
   (f/cljs-repl))
 
+(defstate figwheel
+  :start (fig-start)
+  :stop (fig-stop))

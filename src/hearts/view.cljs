@@ -8,6 +8,42 @@
 
 (enable-console-print!)
 
+(def card-width 100)
+(def card-height 150)
+
+(def rank->name
+  (let [numbers (map str (range 1 10))]
+    (merge {"T" "10"
+            "A" "ace"
+            "J" "jack"
+            "Q" "queen"
+            "K" "king"}
+           (zipmap numbers numbers))))
+
+(def suit->name {"D" "diamonds"
+                 "H" "hearts"
+                 "S" "spades"
+                 "C" "clubs"})
+
+(defn card->svg [card]
+  (if (= card "XX")
+    "img/cards/card_back.svg"
+    (let [[rank suit] card]
+      (str "img/cards/" (rank->name rank) "_of_" (suit->name suit) ".svg"))))
+
+(defn card [card offset]
+  [:img {:src (card->svg card)
+         :style {:width card-width
+                 :height card-height
+                 :position :absolute
+                 :left offset}
+         }])
+
+(defn hand [cards]
+  (into [:div {:style {:height card-height}}]
+        (map-indexed #(identity [card %2 (* (/ card-width 5) %1)]) @cards)))
+
+
 (defcard-doc
   "
 # Hearts Rules
@@ -57,5 +93,16 @@ The queen can be led at any time.
 Source: http://www.bicyclecards.com/how-to-play/hearts
 ")
 
-(defcard-rg deck
-  )
+
+(defcard-rg hand
+  (fn [cards]
+    [hand cards])
+  (r/atom (first (core/deal-among 4 (shuffle core/deck))))
+  {:inspect-data true})
+
+(defcard-rg card
+  [hand (r/atom ["KC"])])
+
+(defcard-rg card-back
+  [hand (r/atom ["XX"])])
+

@@ -57,3 +57,5 @@
             :score 0}]
  :trick []
  }
+(comment
+  (deal-among 4 (shuffle deck)))
