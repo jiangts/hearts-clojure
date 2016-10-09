@@ -12,7 +12,7 @@
 (def card-height 150)
 
 (def rank->name
-  (let [numbers (map str (range 1 10))]
+  (let [numbers (map str (range 2 10))]
     (merge {"T" "10"
             "A" "ace"
             "J" "jack"
@@ -39,9 +39,12 @@
                  :left offset}
          }])
 
-(defn hand [cards]
-  (into [:div {:style {:height card-height}}]
-        (map-indexed #(identity [card %2 (* (/ card-width 5) %1)]) @cards)))
+(defn hand
+  ([cards]
+   [hand {} cards])
+  ([opts cards]
+   (into [:div (merge {:style {:height card-height}} opts)]
+         (map-indexed #(identity [card %2 (* (/ card-width 5) %1)]) @cards))))
 
 
 (defcard-doc
@@ -105,4 +108,19 @@ Source: http://www.bicyclecards.com/how-to-play/hearts
 
 (defcard-rg card-back
   [hand (r/atom ["XX"])])
+
+(defcard-rg card-rot-90
+  [hand {:class "rot-90"} (r/atom ["XX"])])
+
+(defcard-rg card-rot-180
+  [hand {:class "rot-180"} (r/atom ["XX"])])
+
+(defcard-rg card-rot-270
+  [hand {:class "rot-270"} (r/atom ["XX"])])
+
+(defcard-rg hand
+  (fn [cards]
+    [hand {:class "rot-270"} cards])
+  (r/atom (map #(identity "XX") (range 13)))
+  {:inspect-data true})
 
