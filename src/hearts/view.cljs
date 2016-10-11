@@ -104,7 +104,7 @@ Source: http://www.bicyclecards.com/how-to-play/hearts
   {:inspect-data true})
 
 (defcard-rg card
-  [hand (r/atom ["KC"])])
+  [hand (r/atom ["QS"])])
 
 (defcard-rg card-back
   [hand (r/atom ["XX"])])
