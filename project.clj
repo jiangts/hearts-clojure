@@ -11,6 +11,7 @@
                  [devcards "0.2.2"]
                  [reagent "0.6.0-rc"]
                  [mount "0.1.10"]
+                 [org.clojure/core.match "0.3.0-alpha4"]
                  [cljsjs/react-bootstrap "0.30.2-0"]]
 
   :plugins [[lein-figwheel "0.5.8"]

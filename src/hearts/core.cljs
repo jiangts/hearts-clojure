@@ -1,4 +1,5 @@
-(ns hearts.core)
+(ns hearts.core
+  (:require [cljs.core.match :refer-macros [match]]))
 
 ;; ===== CREATE DATA ===== ;;
 (def suits #{"H" "D" "S" "C"})
@@ -13,6 +14,8 @@
     (-> hearts
       (zipmap (repeat 1))
       (assoc "QS" 13))))
+
+(def has-some? (comp some? some))
 
 ;; ===== DECK OPERATIONS ===== ;;
 (defn discard
@@ -29,6 +32,13 @@
   "returns n cards drawn from deck + remainder of deck"
   [n deck]
   (split-at n deck))
+
+;; ===== CARD OPERATIONS ===== ;;
+(defn card->suit [[rank suit]]
+  suit)
+
+(defn card->rank [[rank suit]]
+  rank)
 
 ;; ===== CONSTRUCT GAME STATE ===== ;;
 (defn make-player [-name]
@@ -51,7 +61,7 @@
 ;;  :trick []
 ;;  }
 (defn init-game-state [names]
-  {:state :play
+  {:state :first
    :turn 0
    :players (-> names init-players (init-hands deck))
    :trick []})
@@ -60,42 +70,87 @@
 (defn has-card? [card hand]
   (if (some #{card} hand) true false))
 
-(defn trick-broken? [])
+#_(defn trick-broken? [])  ;; not in this version!
+
+(defn trick-suit [trick]
+  (if (empty? trick)
+    suits
+    #{(card->suit (first trick))}))
 
 (defn play-card
   "Each player must follow suit if possible. If a player is void of the suit led, a
   card of any other suit may be discarded. However, if a player has no clubs
   when the first trick is led, a heart or the queen of spades cannot be
   discarded."
-  [card hand trick turn])
+  [card hand trick first?]
+  (let [suit (trick-suit trick)
+        has-card? (has-some? #{card} hand)
+        has-suit? (has-some? #(contains? suit (card->suit %)) hand)
+        follows-suit? (contains? suit (card->suit card))]
+    (if has-card?
+      (match [has-suit? follows-suit? first?]
+             [true true _] card
+             [true false _] (js/Error. "Card does not match suit.")
+             [false _ true] (if (has-some? #{card} (keys card-scores))
+                              (js/Error. "Cannot discard heart or queen of spades on first trick.")
+                              card)
+             [false _ false] card)
+      (js/Error. (str "You don't have " card " in your hand.")))))
+
+(defn highest-of-suit [suit cards]
+  (let [ranked-ranks (zipmap (range) ranks)]
+    (->> cards
+      (filter #(contains? suit (card->suit %)))
+      (sort-by #(get ranked-ranks (int (first %))))
+      last)))
 
 (defn trick-winner
   "The highest card of the suit led wins a trick and the winner of
   that trick leads next."
-  [trick players turn])
+  [trick leader]
+  (let [suit (trick-suit trick)
+        winning-card (highest-of-suit suit trick)
+        player-idx (fn [idx card]
+                     [(mod idx 4) card])]
+    (->> trick
+      (map player-idx (drop leader (range)))
+      (filter #(= winning-card (last %)))
+      ffirst)))
 
 ;; ===== QUERIES ===== ;;
 (defn starting-player [players]
   (let [index-2c (fn [index player]
                    [index (some #{"2C"} (:hand player))])]
-    (->> (map-indexed index-2c players)
+    (->> players  ;; look familiar?
+      (map-indexed index-2c)
       (filter #(last %))
       ffirst)))
 
 ;; ===== GAMEPLAY OPERATIONS ===== ;;
 (defn start-turn [state]
-  (assoc state :turn (starting-player (:players state))) 
+  (assoc state :turn (starting-player (:players state))))
 
 (defn next-turn [state]
-  (let [turn ]
-    (->> turn inc (mod 4))))
-
+  (let [n (count (:players state))]
+    (-> state
+      (assoc :state :play)  ;; not :first trick
+      (update :turn #(-> % inc (mod n))))))
 
 (comment
-  (deal-among 4 (shuffle deck)))
-(comment
+  (deal-among 4 (shuffle deck))
+
   (def names ["allan" "adi" "quan" "lucy"])
   (-> names init-players (init-hands deck))
+
   (def state (init-game-state names))
   (starting-player (:players state))
-  (start-turn state))
+  (def state-1 (start-turn state))
+  (next-turn state-1)
+
+  (def card "1S")
+  (def hand '("QH" "QS" "1H" "1S"))
+  (def trick '("3C" "KC"))
+  (def first? true)
+  (play-card card hand trick first?)
+  (trick-winner '("3C" "6C" "JH" "7C") 2)
+  )
