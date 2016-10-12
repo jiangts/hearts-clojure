@@ -1,5 +1,7 @@
 (ns hearts.core
-  (:require [cljs.core.match :refer-macros [match]]))
+  (:require [cljs.core.match :refer-macros [match]]
+            [hearts.utils :as utils :refer [spy]]
+            [cljs.pprint :refer [pprint]]))
 
 ;; ===== CREATE DATA ===== ;;
 (def suits #{"H" "D" "S" "C"})
@@ -26,9 +28,10 @@
 (defn deal-among
   "returns n hands with the same number of cards"
   [n deck]
-  (partition (quot (count deck) n) deck))
+  (let [hand-size (quot (count deck) n)]
+   (partition hand-size (shuffle deck))))
 
-(defn draw
+#_(defn draw
   "returns n cards drawn from deck + remainder of deck"
   [n deck]
   (split-at n deck))
@@ -52,7 +55,7 @@
         hands (deal-among n-players deck)]
    (mapv #(assoc %1 :hand %2) players hands)))
 
-;; {:state :play
+;; {:ntrick 0
 ;;  :turn 0 ;; player index. increment mod 4 or change when someone wins trick
 ;;  :players [{:name "str"
 ;;             :hand []
@@ -61,7 +64,7 @@
 ;;  :trick []
 ;;  }
 (defn init-game-state [names]
-  {:state :first
+  {:ntrick 0
    :turn 0
    :players (-> names init-players (init-hands deck))
    :trick []})
@@ -73,17 +76,16 @@
 #_(defn trick-broken? [])  ;; not in this version!
 
 (defn trick-suit [trick]
-  (if (empty? trick)
-    suits
-    #{(card->suit (first trick))}))
+  (when-not (empty? trick)
+    (card->suit (first trick))))
 
-(defn play-card
+(defn valid-move
   "Each player must follow suit if possible. If a player is void of the suit led, a
   card of any other suit may be discarded. However, if a player has no clubs
   when the first trick is led, a heart or the queen of spades cannot be
   discarded."
   [card hand trick first?]
-  (let [suit (trick-suit trick)
+  (let [suit #{(trick-suit trick)}
         has-card? (has-some? #{card} hand)
         has-suit? (has-some? #(contains? suit (card->suit %)) hand)
         follows-suit? (contains? suit (card->suit card))]
@@ -98,49 +100,88 @@
       (js/Error. (str "You don't have " card " in your hand.")))))
 
 (defn highest-of-suit [suit cards]
-  (let [ranked-ranks (zipmap (range) ranks)]
-    (->> cards
-      (filter #(contains? suit (card->suit %)))
-      (sort-by #(get ranked-ranks (int (first %))))
-      last)))
+  (let [ranked-ranks (zipmap ranks (range))
+        highest (->> cards
+                  (filter #(contains? #{suit} (card->suit %)))
+                  (apply max-key #(ranked-ranks (card->rank %))))]
+    (.indexOf cards highest)))
 
 (defn trick-winner
   "The highest card of the suit led wins a trick and the winner of
   that trick leads next."
   [trick leader]
-  (let [suit (trick-suit trick)
-        winning-card (highest-of-suit suit trick)
-        player-idx (fn [idx card]
-                     [(mod idx 4) card])]
-    (->> trick
-      (map player-idx (drop leader (range)))
-      (filter #(= winning-card (last %)))
-      ffirst)))
+  (let [winning-card (highest-of-suit (trick-suit trick) trick)]
+    (-> winning-card
+      (+ leader)
+      (mod 4))))
+
+(defn starting-player [players]
+  (let [arr (map #(some #{"2C"} (:hand %)) players)]
+    (.indexOf arr "2C")))
 
 ;; ===== QUERIES ===== ;;
-(defn starting-player [players]
-  (let [index-2c (fn [index player]
-                   [index (some #{"2C"} (:hand player))])]
-    (->> players  ;; look familiar?
-      (map-indexed index-2c)
-      (filter #(last %))
-      ffirst)))
+
+(defn trick-over? [{:keys [ntrick turn players trick] :as state}]
+  (= (count trick) (count players)))
+
+(defn round-over? [{:keys [ntrick turn players trick] :as state}]
+  (zero? (mod ntrick (quot (count deck) (count players)))))
+
+(defn player-score [{:keys [ntrick turn players trick] :as state} n]
+  (->> (get players n)
+    :taken
+    (map card-scores)
+    (apply +)))
 
 ;; ===== GAMEPLAY OPERATIONS ===== ;;
-(defn start-turn [state]
+(defn start-game [state]
   (assoc state :turn (starting-player (:players state))))
 
 (defn next-turn [state]
   (let [n (count (:players state))]
     (-> state
-      (assoc :state :play)  ;; not :first trick
+      (update :ntrick inc)
       (update :turn #(-> % inc (mod n))))))
+
+(defn clear-cards [player]
+  (-> player
+    (assoc :taken [])
+    (assoc :hand [])))
+
+(defn next-round [state]
+  (-> state
+    (update :players #(map %2 %1) clear-cards)
+    (update :players init-hands deck)
+    (assoc :ntrick 0)))
+
+(defn play-card [{:keys [ntrick turn players trick] :as state} card]
+  (let [player (get players turn)
+        hand (:hand player)
+        move (utils/throw-err (valid-move card hand trick (zero? ntrick)))]
+    (-> state
+      (update-in [:players turn :hand] #(discard #{%2} %1) move)
+      (update-in [:trick] conj move))))
+
+(defn finish-trick [{:keys [ntrick turn players trick] :as state}]
+  (let [winner (trick-winner trick turn)]
+    (-> state
+      (update-in [:players winner :taken] concat trick)
+      (assoc :trick [])
+      (assoc :turn winner))))
+
+(defn play-turn [state card]
+  (let [next-state (-> state
+                    (play-card card)
+                    next-turn)]
+    (cond-> next-state
+      (trick-over? next-state) finish-trick
+      (round-over? next-state) next-round)))
 
 (comment
   (deal-among 4 (shuffle deck))
 
   (def names ["allan" "adi" "quan" "lucy"])
-  (-> names init-players (init-hands deck))
+  (def players (-> names init-players (init-hands deck)))
 
   (def state (init-game-state names))
   (starting-player (:players state))
@@ -150,7 +191,19 @@
   (def card "1S")
   (def hand '("QH" "QS" "1H" "1S"))
   (def trick '("3C" "KC"))
-  (def first? true)
-  (play-card card hand trick first?)
+  (def first? false)
+  (valid-move "QH" hand '() first?)
+  (valid-move card hand trick first?)
+  (highest-of-suit-2 "C" '("3C" "6C" "JH" "7C"))
   (trick-winner '("3C" "6C" "JH" "7C") 2)
+
+  (def state (start-game (init-game-state names)))
+  (pprint state)
+  (pprint
+    (-> state
+      (play-turn "JS")
+      (play-turn "4S")
+      (play-turn "KS")
+      (play-turn "8S")))
+
   )
