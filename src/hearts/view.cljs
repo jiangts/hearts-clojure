@@ -1,15 +1,21 @@
 (ns hearts.view
   (:require
-    [devcards.core]
     [reagent.core :as r]
-    [hearts.core :as core])
-  (:require-macros
-   [devcards.core :as dc :refer [defcard deftest defcard-doc defcard-rg]]))
+            [hearts.utils :as utils :refer [spy]]
+    [hearts.core :as core]))
+
+(defonce state (r/atom (core/start-game (core/init-game-state ["allan" "adi" "quan" "lucy"]))))
+(defn play-move [card]
+  (swap! state core/play-turn card))
 
 (enable-console-print!)
 
-(def card-width 100)
-(def card-height 150)
+(def scale 1)
+(def card-width (* 80 scale))
+(def card-height (* 120 scale))
+(def board-size (* 600 scale))
+;; (def card-width 100)
+;; (def card-height 150)
 
 (def rank->name
   (let [numbers (map str (range 2 10))]
@@ -31,96 +37,83 @@
     (let [[rank suit] card]
       (str "img/cards/" (rank->name rank) "_of_" (suit->name suit) ".svg"))))
 
-(defn card [card offset]
-  [:img {:src (card->svg card)
-         :style {:width card-width
-                 :height card-height
-                 :position :absolute
-                 :left offset}
-         }])
+(defn card
+  ([c]
+   [card {} c])
+  ([opts c]
+   (let [default {:src (card->svg c)
+                  :style {:width card-width
+                          :height card-height
+                          :position :absolute}
+                  :on-click #(play-move c)}]
+     [:img (merge-with conj default opts)])))
 
 (defn hand
   ([cards]
    [hand {} cards])
   ([opts cards]
-   (into [:div (merge {:style {:height card-height}} opts)]
-         (map-indexed #(identity [card %2 (* (/ card-width 5) %1)]) @cards))))
+   (let [offset #(identity {:style {:left (* (/ card-width 5) %)}})
+         default-style {:style {:height card-height
+                                :position :relative}}]
+     (into [:div (merge-with conj default-style opts)]
+           (map-indexed #(identity [card (offset %1) %2]) cards)))))
 
+(defn trick
+  ([cards]
+   [trick {} cards])
+  ([opts {:keys [N E S W] :as cards}]
+   (let [separation card-width
+         -separation (- separation)
+         x-offset (/ card-height 4)
+         style-map {N {:class "rot-180"
+                       :style {:top -separation}}
+                    W {:class "rot-90"
+                       :style {:left -separation}}
+                    E {:class "rot-90"
+                       :style {:left separation}}
+                    S {:style {:top separation}}}
+         items (remove #(nil? (key %)) style-map)
+         default {:style {:height (* 2 card-height)
+                          :position :relative}}]
+     (when (seq cards)
+       (into [:div (merge-with conj default opts)]
+             (map #(into [card] (reverse %)) items))))))
 
-(defcard-doc
-  "
-# Hearts Rules
+(defn one-hand [[_ opt] cards]
+  [hand (merge-with conj {:style {:position :absolute}} opt) cards])
 
-### THE PACK
-  The standard 52-card pack is used.
+(defn center-trick [cards]
+  (let [offset #(-> board-size (- %) (/ 2))]
+    [trick {:style {:top (offset card-height)
+                    :right (- (offset card-width))
+                    :pointer-events :none}}
+     cards]))
 
-### OBJECTIVE
-  To be the player with the lowest score at the end of the
-  game. When one player hits the agreed-upon score or higher, the game ends; and
-  the player with the lowest score wins.
-
-### CARD VALUES/SCORING
-  At the end of each hand, players count the number of
-  hearts they have taken as well as the queen of spades, if applicable. Hearts
-  count as one point each and the queen counts 13 points.  Each heart - 1 point
-  The Q - 13 points The aggregate total of all scores for each hand must be a
-  multiple of 26.  The game is usually played to 100 points (some play to 50).
-  When a player takes all 13 hearts and the queen of spades in one hand, instead
-  of losing 26 points, that player scores zero and each of his opponents score
-  an additional 26 points.
-
-### THE DEAL
-  Deal the cards one at a time, face down, clockwise. In a
-  four-player game, each is dealt 13 cards; in a three-player game, the 2 of
-  diamonds should be removed, and each player gets 17 cards; in a five-player
-  game, the 2 of diamonds and 2 of clubs should be removed so that each player
-  will get 10 cards.
-
-### THE PLAY
-  The player holding the 2 of clubs after the pass makes the opening
-  lead. If the 2 has been removed for the three handed game, then the 3 of clubs
-  is led.
-
-Each player must follow suit if possible. If a player is void of the suit led, a
-  card of any other suit may be discarded. However, if a player has no clubs
-  when the first trick is led, a heart or the queen of spades cannot be
-  discarded. The highest card of the suit led wins a trick and the winner of
-  that trick leads next. There is no trump suit.
-
-The winner of the trick collects it and places it face down. Hearts may not be
-  led until a heart or the queen of spades has been discarded. The queen does
-  not have to be discarded at the first opportunity.
-
-The queen can be led at any time.
-
-Source: http://www.bicyclecards.com/how-to-play/hearts
-")
-
-
-(defcard-rg hand
-  (fn [cards]
-    [hand cards])
-  (r/atom (first (core/deal-among 4 (shuffle core/deck))))
-  {:inspect-data true})
-
-(defcard-rg card
-  [hand (r/atom ["QS"])])
-
-(defcard-rg card-back
-  [hand (r/atom ["XX"])])
-
-(defcard-rg card-rot-90
-  [hand {:class "rot-90"} (r/atom ["XX"])])
-
-(defcard-rg card-rot-180
-  [hand {:class "rot-180"} (r/atom ["XX"])])
-
-(defcard-rg card-rot-270
-  [hand {:class "rot-270"} (r/atom ["XX"])])
-
-(defcard-rg hand
-  (fn [cards]
-    [hand {:class "rot-270"} cards])
-  (r/atom (map #(identity "XX") (range 13)))
-  {:inspect-data true})
+(defn game [state]
+  (fn [state]
+   (let [{:keys [ntrick turn players trick]} @state
+        positions (zipmap [:S :E :N :W] players)
+        hands (map :hand players)
+        rot-x-offset (/ card-height 2)
+        rot-y-offset (-> board-size (- (/ card-height 2)))
+        dir-order [:S :E :N :W]
+        dir-opts {:S {:style {:bottom 0}}
+                  :E {:class "rot-270"
+                      :style {:right rot-x-offset
+                              :top rot-y-offset}}
+                  :N {:class "rot-180"
+                      :style {:left board-size}}
+                  :W {:class "rot-90"
+                      :style {:left rot-x-offset
+                              :bottom rot-y-offset}}}
+        n-players (count players)
+        start-dir (- n-players (mod (- ntrick turn) n-players))]
+    [:div
+     [:h1 "Player " (inc turn) "'s move (" (nth dir-order turn) ")"]
+     [:div {:style {:width board-size
+                    :height board-size
+                    :background-color "#265C33"
+                    :position :relative}}
+      (into [:div] (mapv one-hand dir-opts hands))
+      [center-trick (spy (zipmap (drop start-dir (cycle dir-order)) trick))]]])))
 

@@ -1,52 +1,11 @@
-(ns hearts.cards
+(ns hearts.dev.cards
   (:require
     [devcards.core]
     [reagent.core :as r]
     [hearts.core :as core]
-    [hearts.view :as view])
+    [hearts.view :as view :refer [hand trick game]])
   (:require-macros
    [devcards.core :as dc :refer [defcard deftest defcard-doc defcard-rg]]))
-
-(enable-console-print!)
-
-(def card-width 100)
-(def card-height 150)
-
-(def rank->name
-  (let [numbers (map str (range 2 10))]
-    (merge {"T" "10"
-            "A" "ace"
-            "J" "jack"
-            "Q" "queen"
-            "K" "king"}
-           (zipmap numbers numbers))))
-
-(def suit->name {"D" "diamonds"
-                 "H" "hearts"
-                 "S" "spades"
-                 "C" "clubs"})
-
-(defn card->svg [card]
-  (if (= card "XX")
-    "img/cards/card_back.svg"
-    (let [[rank suit] card]
-      (str "img/cards/" (rank->name rank) "_of_" (suit->name suit) ".svg"))))
-
-(defn card [card offset]
-  [:img {:src (card->svg card)
-         :style {:width card-width
-                 :height card-height
-                 :position :absolute
-                 :left offset}
-         }])
-
-(defn hand
-  ([cards]
-   [hand {} cards])
-  ([opts cards]
-   (into [:div (merge {:style {:height card-height}} opts)]
-         (map-indexed #(identity [card %2 (* (/ card-width 5) %1)]) @cards))))
-
 
 (defcard-doc
   "
@@ -99,29 +58,31 @@ Source: http://www.bicyclecards.com/how-to-play/hearts
 
 
 (defcard-rg hand
-  (fn [cards]
-    [hand cards])
-  (r/atom (first (core/deal-among 4 (shuffle core/deck))))
-  {:inspect-data true})
+  [hand (first (core/deal-among 4 (shuffle core/deck)))])
 
 (defcard-rg card
-  [hand (r/atom ["QS"])])
+  [hand ["QS"]])
 
 (defcard-rg card-back
-  [hand (r/atom ["XX"])])
+  [hand ["XX"]])
 
 (defcard-rg card-rot-90
-  [hand {:class "rot-90"} (r/atom ["XX"])])
+  [hand {:class "rot-90"} ["XX"]])
 
 (defcard-rg card-rot-180
-  [hand {:class "rot-180"} (r/atom ["XX"])])
+  [hand {:class "rot-180"} ["XX"]])
 
 (defcard-rg card-rot-270
-  [hand {:class "rot-270"} (r/atom ["XX"])])
+  [hand {:class "rot-270"} ["XX"]])
 
-(defcard-rg hand
-  (fn [cards]
-    [hand {:class "rot-270"} cards])
-  (r/atom (map #(identity "XX") (range 13)))
-  {:inspect-data true})
+(defcard-rg trick
+  [trick {:N "QS"
+          :E "QC"
+          :S "JD"
+          :W "3S"}])
 
+(defcard-rg game
+  (fn [state] [game state])
+  view/state
+  {:inspect-data true
+   :history true})

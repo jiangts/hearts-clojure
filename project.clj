@@ -10,6 +10,7 @@
                  [org.clojure/clojurescript "1.9.229"]
                  [devcards "0.2.2"]
                  [reagent "0.6.0-rc"]
+                 [re-com "0.9.0"]
                  [mount "0.1.10"]
                  [org.clojure/core.match "0.3.0-alpha4"]
                  [cljsjs/react-bootstrap "0.30.2-0"]]

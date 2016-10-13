@@ -125,7 +125,7 @@
   (= (count trick) (count players)))
 
 (defn round-over? [{:keys [ntrick turn players trick] :as state}]
-  (zero? (mod ntrick (quot (count deck) (count players)))))
+  (= ntrick (count deck)))
 
 (defn player-score [{:keys [ntrick turn players trick] :as state} n]
   (->> (get players n)
@@ -150,7 +150,7 @@
 
 (defn next-round [state]
   (-> state
-    (update :players #(map %2 %1) clear-cards)
+    (update :players #(map clear-cards %))
     (update :players init-hands deck)
     (assoc :ntrick 0)))
 
@@ -172,10 +172,11 @@
 (defn play-turn [state card]
   (let [next-state (-> state
                     (play-card card)
-                    next-turn)]
+                    next-turn)
+        new-round (comp start-game next-round)]
     (cond-> next-state
       (trick-over? next-state) finish-trick
-      (round-over? next-state) next-round)))
+      (round-over? next-state) new-round)))
 
 (comment
   (deal-among 4 (shuffle deck))
