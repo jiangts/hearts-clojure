@@ -21,12 +21,10 @@
 
 (enable-console-print!)
 
-(def scale 1.2)
+(def scale 1)
 (def card-width (* 80 scale))
 (def card-height (* 120 scale))
 (def board-size (* 600 scale))
-;; (def card-width 100)
-;; (def card-height 150)
 
 (def rank->name
   (let [numbers (map str (range 2 10))]

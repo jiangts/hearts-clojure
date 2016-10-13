@@ -152,7 +152,7 @@
   (.indexOf (map player-score players) (apply + (vals card-scores))))
 
 (defn update-scores [players]
-  (spy "huh?"(map #(update % :score + (player-score %)) players)))
+  (map #(update % :score + (player-score %)) players))
 
 (defn moonshot-update-scores [players shooter]
   (as-> players p
