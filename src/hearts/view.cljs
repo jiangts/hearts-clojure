@@ -1,7 +1,7 @@
 (ns hearts.view
   (:require
     [reagent.core :as r]
-            [hearts.utils :as utils :refer [spy]]
+    [hearts.utils :as utils :refer [spy]]
     [hearts.core :as core]))
 
 (defonce state (r/atom (core/start-game (core/init-game-state ["Allan" "Adi" "Quan" "Lucy"]))))
@@ -14,9 +14,14 @@
     (catch js/Object e
       (swap! state assoc :exception e))))
 
+(add-watch state :lifecycle
+           (fn [_ _ old-state new-state]
+             (when (core/game-over? new-state)
+               (core/game-winner new-state))))
+
 (enable-console-print!)
 
-(def scale 1)
+(def scale 1.2)
 (def card-width (* 80 scale))
 (def card-height (* 120 scale))
 (def board-size (* 600 scale))
@@ -99,7 +104,7 @@
   [:div {:style {:display :inline-block
                  :width (/ board-size 4)}}
    [:h3 "Player " (inc index) ": " (:name player)]
-   [:p "Score: " (core/player-score player)]])
+   [:p "Score: " (+ (core/player-score player) (:score player))]])
 
 (defn game [state]
   (fn [state]
@@ -122,9 +127,8 @@
         start-dir (- n-players (mod (- ntrick turn) n-players))]
     [:div
      [:h1 "Player " (inc turn) "'s move (" (nth dir-order turn) ")"]
-     (when exception
-       [:h3 {:style {:color :red}}
-        (.-message exception)])
+     [:h3 {:style {:color :red}}
+      (when exception (.-message exception))]
      [:div {:style {:width board-size
                     :height board-size
                     :background-color "#265C33"

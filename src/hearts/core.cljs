@@ -10,6 +10,8 @@
 (def deck (for [suit suits rank ranks]
             (str rank suit)))
 
+(def max-score 26)
+
 (def card-scores
   (let [hearts (for [rank ranks]
                  (str rank "H"))]
@@ -129,6 +131,13 @@
     (map card-scores)
     (apply +)))
 
+(defn game-over? [state]
+  (>= (apply max (map :score (:players state)))
+      max-score))
+
+(defn game-winner [state]
+  (apply min-key (into [:score] (:players state))))
+
 ;; ===== GAMEPLAY OPERATIONS ===== ;;
 (defn start-game [state]
   (assoc state :turn (starting-player (:players state))))
@@ -139,6 +148,17 @@
       (update :ntrick inc)
       (update :turn #(-> % inc (mod n))))))
 
+(defn shoot-moon? [players]
+  (.indexOf (map player-score players) (apply + (vals card-scores))))
+
+(defn update-scores [players]
+  (spy "huh?"(map #(update % :score + (player-score %)) players)))
+
+(defn moonshot-update-scores [players shooter]
+  (as-> players p
+    (map #(update % :score + 26) p)
+    (update-in p [shooter :score] - 26)))
+
 (defn clear-cards [player]
   (-> player
     (assoc :taken [])
@@ -146,6 +166,10 @@
 
 (defn next-round [state]
   (-> state
+    (update :players #(let [shooter (shoot-moon? %)]
+                        (if (< shooter 0)
+                          (update-scores %)
+                          (moonshot-update-scores % shooter))))
     (update :players #(map clear-cards %))
     (update :players init-hands deck)
     (assoc :ntrick 0)))
