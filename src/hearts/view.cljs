@@ -4,9 +4,15 @@
             [hearts.utils :as utils :refer [spy]]
     [hearts.core :as core]))
 
-(defonce state (r/atom (core/start-game (core/init-game-state ["allan" "adi" "quan" "lucy"]))))
+(defonce state (r/atom (core/start-game (core/init-game-state ["Allan" "Adi" "Quan" "Lucy"]))))
+
 (defn play-move [card]
-  (swap! state core/play-turn card))
+  (try
+    (doto state
+      (swap! core/play-turn card)
+      (swap! dissoc :exception))
+    (catch js/Object e
+      (swap! state assoc :exception e))))
 
 (enable-console-print!)
 
@@ -89,9 +95,15 @@
                     :pointer-events :none}}
      cards]))
 
+(defn score [index player]
+  [:div {:style {:display :inline-block
+                 :width (/ board-size 4)}}
+   [:h3 "Player " (inc index) ": " (:name player)]
+   [:p "Score: " (core/player-score player)]])
+
 (defn game [state]
   (fn [state]
-   (let [{:keys [ntrick turn players trick]} @state
+   (let [{:keys [ntrick turn players trick exception]} @state
         positions (zipmap [:S :E :N :W] players)
         hands (map :hand players)
         rot-x-offset (/ card-height 2)
@@ -110,10 +122,14 @@
         start-dir (- n-players (mod (- ntrick turn) n-players))]
     [:div
      [:h1 "Player " (inc turn) "'s move (" (nth dir-order turn) ")"]
+     (when exception
+       [:h3 {:style {:color :red}}
+        (.-message exception)])
      [:div {:style {:width board-size
                     :height board-size
                     :background-color "#265C33"
                     :position :relative}}
       (into [:div] (mapv one-hand dir-opts hands))
-      [center-trick (spy (zipmap (drop start-dir (cycle dir-order)) trick))]]])))
+      [center-trick (zipmap (drop start-dir (cycle dir-order)) trick)]]
+     (into [:div] (map-indexed score players))])))
 

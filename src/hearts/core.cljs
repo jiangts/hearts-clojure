@@ -31,11 +31,6 @@
   (let [hand-size (quot (count deck) n)]
    (partition hand-size (shuffle deck))))
 
-#_(defn draw
-  "returns n cards drawn from deck + remainder of deck"
-  [n deck]
-  (split-at n deck))
-
 ;; ===== CARD OPERATIONS ===== ;;
 (defn card->suit [[rank suit]]
   suit)
@@ -73,7 +68,8 @@
 (defn has-card? [card hand]
   (if (some #{card} hand) true false))
 
-#_(defn trick-broken? [])  ;; not in this version!
+(defn trick-broken? [players]
+  (some (set (keys card-scores)) (mapcat :taken players)))
 
 (defn trick-suit [trick]
   (when-not (empty? trick)
@@ -127,8 +123,8 @@
 (defn round-over? [{:keys [ntrick turn players trick] :as state}]
   (= ntrick (count deck)))
 
-(defn player-score [{:keys [ntrick turn players trick] :as state} n]
-  (->> (get players n)
+(defn player-score [player]
+  (->> player
     :taken
     (map card-scores)
     (apply +)))
@@ -157,7 +153,13 @@
 (defn play-card [{:keys [ntrick turn players trick] :as state} card]
   (let [player (get players turn)
         hand (:hand player)
-        move (utils/throw-err (valid-move card hand trick (zero? ntrick)))]
+        ;; that's jank...
+        _ (when (and (not= card "2C") (= 0 ntrick (count trick)))
+            (throw (js/Error. "Must lead with 2C.")))
+        move (utils/throw-err (valid-move card hand trick (zero? ntrick)))
+        _ (when (and (contains? card-scores card) (not (trick-broken? players))
+                     (zero? (count trick)))
+            (throw (js/Error. "Cannot lead with H or QS: Hearts not yet broken.")))]
     (-> state
       (update-in [:players turn :hand] #(discard #{%2} %1) move)
       (update-in [:trick] conj move))))
