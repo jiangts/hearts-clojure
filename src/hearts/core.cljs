@@ -1,7 +1,9 @@
 (ns hearts.core
   (:require [cljs.core.match :refer-macros [match]]
             [hearts.utils :as utils :refer [spy]]
-            [cljs.pprint :refer [pprint]]))
+            [cljs.pprint :refer [pprint]]
+            [goog.string :as gstr])
+  (:require-macros [hearts.macros :refer [spy2]]))
 
 ;; ===== CREATE DATA ===== ;;
 (def suits #{"H" "D" "S" "C"})
@@ -31,7 +33,7 @@
   "returns n hands with the same number of cards"
   [n deck]
   (let [hand-size (quot (count deck) n)]
-   (partition hand-size (shuffle deck))))
+   (partition hand-size deck)))
 
 ;; ===== CARD OPERATIONS ===== ;;
 (defn card->suit [[rank suit]]
@@ -49,7 +51,7 @@
 
 (defn init-hands [players deck]
   (let [n-players (count players)
-        hands (deal-among n-players deck)]
+        hands (deal-among n-players (shuffle deck))]
    (mapv #(assoc %1 :hand %2) players hands)))
 
 ;; {:ntrick 0
@@ -67,15 +69,11 @@
    :trick []})
 
 ;; ===== HAND OPERATIONS ===== ;;
-(defn has-card? [card hand]
-  (if (some #{card} hand) true false))
-
 (defn trick-broken? [players]
   (some (set (keys card-scores)) (mapcat :taken players)))
 
 (defn trick-suit [trick]
-  (when-not (empty? trick)
-    (card->suit (first trick))))
+  (card->suit (first trick)))
 
 (defn valid-move
   "Each player must follow suit if possible. If a player is void of the suit led, a
@@ -84,9 +82,9 @@
   discarded."
   [card hand trick first?]
   (let [suit #{(trick-suit trick)}
-        has-card? (has-some? #{card} hand)
-        has-suit? (has-some? #(contains? suit (card->suit %)) hand)
-        follows-suit? (contains? suit (card->suit card))]
+        has-card? (some #{card} hand)
+        has-suit? (has-some? suit (map #(card->suit %) hand))
+        follows-suit? (has-some? suit (card->suit card))]
     (if has-card?
       (match [has-suit? follows-suit? first?]
              [true true _] card
@@ -98,20 +96,20 @@
       (js/Error. (str "You don't have " card " in your hand.")))))
 
 (defn highest-of-suit [suit cards]
-  (let [ranked-ranks (zipmap ranks (range))
-        highest (->> cards
-                  (filter #(contains? #{suit} (card->suit %)))
-                  (apply max-key #(ranked-ranks (card->rank %))))]
-    (.indexOf cards highest)))
+  (let [rank-vals (zipmap ranks (range))]
+    (->> cards
+      (filter #(contains? #{suit} (card->suit %)))
+      (apply max-key #(rank-vals (card->rank %))))))
 
 (defn trick-winner
   "The highest card of the suit led wins a trick and the winner of
   that trick leads next."
   [trick leader]
-  (let [winning-card (highest-of-suit (trick-suit trick) trick)]
-    (-> winning-card
+  (let [winning-card (highest-of-suit (trick-suit trick) trick)
+        card-index (.indexOf trick winning-card)]
+    (-> card-index
       (+ leader)
-      (mod 4))))
+      (mod (count trick)))))
 
 (defn starting-player [players]
   (let [arr (map #(some #{"2C"} (:hand %)) players)]
@@ -143,10 +141,10 @@
   (assoc state :turn (starting-player (:players state))))
 
 (defn next-turn [state]
-  (let [n (count (:players state))]
+  (let [n-players (count (:players state))]
     (-> state
       (update :ntrick inc)
-      (update :turn #(-> % inc (mod n))))))
+      (update :turn #(-> % inc (mod n-players))))))
 
 (defn shoot-moon? [players]
   (.indexOf (map player-score players) (apply + (vals card-scores))))

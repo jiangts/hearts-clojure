@@ -11,3 +11,4 @@
 (defn spy [& args]
   (println (apply pr-str args))
   (last args))
+
